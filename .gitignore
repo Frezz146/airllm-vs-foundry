@@ -218,3 +218,9 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Earlier exploratory runs (8B model, gpt-5-mini), not part of the post
+docs/benchmark.png
+results/summary.csv
+results/raw/airllm_NousResearch_*.json
+results/raw/foundry_bench-model.json

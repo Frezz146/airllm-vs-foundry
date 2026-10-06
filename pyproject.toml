@@ -1,0 +1,25 @@
+[project]
+name = "airllm-vs-foundry"
+version = "0.1.0"
+description = "Benchmark: AirLLM layer streaming vs. Microsoft Foundry deployments"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+dependencies = [
+    "openai>=1.50",
+    "azure-identity>=1.17",
+    "python-dotenv>=1.0",
+    "pandas>=2.2",
+    "matplotlib>=3.8",
+]
+
+[project.optional-dependencies]
+airllm = [
+    "airllm",
+    "torch",
+    "transformers",
+    "mlx; sys_platform == 'darwin'",
+]
+
+[tool.uv]
+package = false

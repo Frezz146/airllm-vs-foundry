@@ -1,0 +1,8 @@
+{"id": "short-01", "length": "short", "prompt": "What is the capital of Germany? Answer in one sentence."}
+{"id": "short-02", "length": "short", "prompt": "Explain what a managed identity is in Azure in two sentences."}
+{"id": "short-03", "length": "short", "prompt": "Name three benefits of infrastructure as code."}
+{"id": "medium-01", "length": "medium", "prompt": "Summarize the difference between a REST API and a message queue for a non-technical manager. Use about 120 words."}
+{"id": "medium-02", "length": "medium", "prompt": "Write a short checklist for securing an Azure Storage account that is accessed by an application."}
+{"id": "medium-03", "length": "medium", "prompt": "Explain retrieval augmented generation and when it is better than fine tuning. Use about 150 words."}
+{"id": "long-01", "length": "long", "prompt": "Draft a one page architecture overview for a customer support assistant that uses an LLM, a knowledge base and an audit log. Cover components, data flow, security and monitoring."}
+{"id": "long-02", "length": "long", "prompt": "Compare running an LLM on a local developer machine with running it as a managed cloud service. Cover latency, cost, privacy, scaling and operations, and finish with a recommendation per scenario."}
