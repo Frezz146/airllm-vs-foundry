@@ -19,7 +19,22 @@ Llama 3.3 70B, 16 new tokens, medians over short, medium and long prompts:
 | Throughput | 0.044 tokens/s | about 40 tokens/s |
 | Cost | not measured (energy and hardware) | 0.71 USD per 1M input and output tokens |
 
-Details, setup and a scenario matrix are in [docs/decision_matrix.md](docs/decision_matrix.md), the chart is [docs/benchmark_70b.png](docs/benchmark_70b.png), the draft of the post is [docs/blog_post.md](docs/blog_post.md).
+Details, setup and a scenario matrix are in [docs/decision_matrix.md](docs/decision_matrix.md), the chart is [docs/images/benchmark_70b.png](docs/images/benchmark_70b.png), the text of the post is [docs/blog/post.md](docs/blog/post.md).
+
+## Repository layout
+
+```
+docs/
+  decision_matrix.md          setup, measured values and scenario matrix
+  blog/post.md                text of the blog post (images link to ../images)
+  blog/post_wordpress.html    the same post as WordPress block markup
+  images/                     benchmark_70b.png (src/report.py), airllm_layer_streaming.png (src/make_diagram.py)
+infra/main.bicep              Foundry resource and model deployment
+prompts/prompts.jsonl         fixed prompt set
+results/raw/                  raw measurements (JSON), results/summary_70b.csv is the aggregate
+scripts/                      foundry.sh (deploy, destroy, list models), airllm_smoke.sh
+src/                          bench_foundry.py, bench_airllm.py, report.py, make_diagram.py, common.py
+```
 
 ## Quick start
 
@@ -44,7 +59,7 @@ uv run python src/bench_airllm.py --model unsloth/Llama-3.3-70B-Instruct --prepa
 caffeinate -i uv run python src/bench_airllm.py --model unsloth/Llama-3.3-70B-Instruct \
   --runs 2 --max-new-tokens 16 --only short-01,medium-01,long-01
 
-# 3. Report (writes results/summary_70b.csv and docs/benchmark_70b.png)
+# 3. Report (writes results/summary_70b.csv and docs/images/benchmark_70b.png)
 uv run python src/report.py --filter 70B --name 70b
 
 # 4. Clean up Azure

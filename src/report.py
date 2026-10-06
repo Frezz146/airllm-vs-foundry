@@ -1,7 +1,7 @@
 """Aggregate raw results into a summary CSV and a chart.
 
-  report.py                          all results      -> results/summary.csv, docs/benchmark.png
-  report.py --filter 70B --name 70b  only series whose label contains 70B -> results/summary_70b.csv, docs/benchmark_70b.png
+  report.py                          all results      -> results/summary.csv, docs/images/benchmark.png
+  report.py --filter 70B --name 70b  only series whose label contains 70B -> results/summary_70b.csv, docs/images/benchmark_70b.png
 
 Compared metrics are tokens per second and time to first token. Total time is not charted because
 the backends may generate a different number of new tokens (AirLLM is very slow per token).
@@ -117,7 +117,8 @@ def main() -> None:
     note += " Tokens per second is the fair comparison."
     fig.text(0.012, 0.905, note, fontsize=9, color=INK_2)
     fig.tight_layout(rect=(0, 0.07 if len(labels) > 2 else 0.06, 1, 0.9))
-    png = ROOT / "docs" / f"benchmark{suffix}.png"
+    png = ROOT / "docs" / "images" / f"benchmark{suffix}.png"
+    png.parent.mkdir(parents=True, exist_ok=True)
     png.parent.mkdir(exist_ok=True)
     fig.savefig(png, dpi=160, facecolor=SURFACE)
     print("\nsaved", out, "and", png)

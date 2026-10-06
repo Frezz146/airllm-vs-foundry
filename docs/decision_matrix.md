@@ -1,6 +1,6 @@
 # Results and decision matrix
 
-Measured on 2026-10-06. Raw data in `results/raw`, aggregate in `results/summary_70b.csv`, chart in `docs/benchmark_70b.png`.
+Measured on 2026-10-06. Raw data in `results/raw`, aggregate in `results/summary_70b.csv`, chart in `docs/images/benchmark_70b.png`.
 
 ## Setup
 

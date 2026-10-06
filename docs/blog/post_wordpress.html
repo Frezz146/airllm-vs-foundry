@@ -1,0 +1,370 @@
+<!-- wp:paragraph -->
+<p></p>
+<!-- /wp:paragraph -->
+
+<!-- wp:paragraph -->
+<p>AirLLM lets you run a 70 billion parameter model on a 64 GB MacBook by loading one layer at a time from disk. It works. It is also about 900 times slower than the same model in Microsoft Foundry. An answer with 200 tokens takes more than an hour locally and a few seconds in the cloud. That makes AirLLM a great tool for offline experiments and a poor one for anything interactive. This post shows the measurements, four pitfalls from the Foundry side and a simple rule for choosing between both.</p>
+<!-- /wp:paragraph -->
+
+<!-- wp:paragraph -->
+<p>All code, raw data and the Bicep template are in the repo: <a href="https://github.com/Frezz146/airllm-vs-foundry">https://github.com/Frezz146/airllm-vs-foundry</a></p>
+<!-- /wp:paragraph -->
+
+<!-- wp:columns -->
+<div class="wp-block-columns"><!-- wp:column -->
+<div class="wp-block-column"><!-- wp:heading {"level":3,"style":{"typography":{"textAlign":"center"}}} -->
+<h3 class="wp-block-heading has-text-align-center">900x</h3>
+<!-- /wp:heading -->
+
+<!-- wp:paragraph {"style":{"typography":{"textAlign":"center"}}} -->
+<p class="has-text-align-center">slower than Foundry for the same model (0.044 versus about 40 tokens per second)</p>
+<!-- /wp:paragraph --></div>
+<!-- /wp:column -->
+
+<!-- wp:column -->
+<div class="wp-block-column"><!-- wp:heading {"level":3,"style":{"typography":{"textAlign":"center"}}} -->
+<h3 class="wp-block-heading has-text-align-center">22.7 s vs 0.34 s</h3>
+<!-- /wp:heading -->
+
+<!-- wp:paragraph {"style":{"typography":{"textAlign":"center"}}} -->
+<p class="has-text-align-center">until the first token appears, local versus Foundry</p>
+<!-- /wp:paragraph --></div>
+<!-- /wp:column -->
+
+<!-- wp:column -->
+<div class="wp-block-column"><!-- wp:heading {"level":3,"style":{"typography":{"textAlign":"center"}}} -->
+<h3 class="wp-block-heading has-text-align-center">0.71 USD</h3>
+<!-- /wp:heading -->
+
+<!-- wp:paragraph {"style":{"typography":{"textAlign":"center"}}} -->
+<p class="has-text-align-center">per million input and output tokens in Foundry (Global Standard)</p>
+<!-- /wp:paragraph --></div>
+<!-- /wp:column --></div>
+<!-- /wp:columns -->
+
+<!-- wp:quote -->
+<blockquote class="wp-block-quote"><!-- wp:paragraph -->
+<p><strong>Why 70B?</strong> My first attempt used an 8B model. It fits into RAM, so AirLLM was never really tested and the comparison told me very little. AirLLM only makes sense for a model that is larger than your memory, so I repeated everything with Llama 3.3 70B on both sides.</p>
+<!-- /wp:paragraph --></blockquote>
+<!-- /wp:quote -->
+
+<!-- wp:details -->
+<details class="wp-block-details"><summary>Quick glossary for non technical readers</summary><!-- wp:list -->
+<ul class="wp-block-list"><!-- wp:list-item -->
+<li><strong>Token:</strong> a chunk of text, roughly three quarters of a word. Models read and write in tokens.</li>
+<!-- /wp:list-item -->
+
+<!-- wp:list-item -->
+<li><strong>Time to first token:</strong> how long you wait until the answer starts to appear.</li>
+<!-- /wp:list-item -->
+
+<!-- wp:list-item -->
+<li><strong>Tokens per second:</strong> how fast the answer is written. 40 tokens per second feels like fast typing, 0.044 means one word every 30 seconds.</li>
+<!-- /wp:list-item -->
+
+<!-- wp:list-item -->
+<li><strong>70B and bf16:</strong> 70 billion parameters, each stored in 2 bytes, which adds up to about 140 GB.</li>
+<!-- /wp:list-item -->
+
+<!-- wp:list-item -->
+<li><strong>Layer:</strong> the model is a stack of 80 identical processing steps. Every token has to pass through all of them.</li>
+<!-- /wp:list-item --></ul>
+<!-- /wp:list --></details>
+<!-- /wp:details -->
+
+<!-- wp:paragraph -->
+<p></p>
+<!-- /wp:paragraph -->
+
+<!-- wp:heading -->
+<h2 class="wp-block-heading">The idea behind AirLLM</h2>
+<!-- /wp:heading -->
+
+<!-- wp:paragraph -->
+<p>A large language model is a stack of layers. Normally all of them must fit into memory (or GPU memory) at once. A 70B model in bf16 needs about 140 GB, far more than a laptop has.</p>
+<!-- /wp:paragraph -->
+
+<!-- wp:paragraph -->
+<p>AirLLM avoids this by keeping only one layer in memory. For every token it reads the first layer from disk, computes, throws it away, reads the next one and so on until all 80 layers are done. Then the next token starts again. Memory is no longer the limit, disk speed is.</p>
+<!-- /wp:paragraph -->
+
+<!-- wp:image {"id":375,"sizeSlug":"full","linkDestination":"none"} -->
+<figure class="wp-block-image size-full"><img src="https://blog.frezz-tech.de/wp-content/uploads/2026/10/airllm_layer_streaming.png" alt="Diagram: normally all 80 layers of a 140 GB model must fit into 64 GB RAM. AirLLM instead reads one layer at a time from the SSD, computes it, discards it and repeats this for every token." class="wp-image-375"/><figcaption class="wp-element-caption">AirLLM trades memory for disk reads: all 80 layers are streamed from the SSD for every generated token.</figcaption></figure>
+<!-- /wp:image -->
+
+<!-- wp:paragraph -->
+<p></p>
+<!-- /wp:paragraph -->
+
+<!-- wp:heading -->
+<h2 class="wp-block-heading">The setup</h2>
+<!-- /wp:heading -->
+
+<!-- wp:paragraph -->
+<p>I wanted a fair comparison, so both sides run the same model: <strong>Llama 3.3 70B Instruct</strong>.</p>
+<!-- /wp:paragraph -->
+
+<!-- wp:list -->
+<ul class="wp-block-list"><!-- wp:list-item -->
+<li><strong>Local:</strong> MacBook Pro 16 inch with Apple silicon (M5 Max, 64 GB RAM, 2 TB SSD), AirLLM on the MLX backend, model from an ungated Hugging Face mirror.</li>
+<!-- /wp:list-item -->
+
+<!-- wp:list-item -->
+<li><strong>Cloud:</strong> Microsoft Foundry, Global Standard deployment in Sweden Central, Entra ID authentication only, deployed with Bicep and a small shell script that can also tear everything down again.</li>
+<!-- /wp:list-item -->
+
+<!-- wp:list-item -->
+<li><strong>Workload:</strong> three prompts (short, medium and long), 16 new tokens each, temperature 0. Foundry got 5 runs per prompt, AirLLM 2 because every run takes six minutes.</li>
+<!-- /wp:list-item --></ul>
+<!-- /wp:list -->
+
+<!-- wp:paragraph -->
+<p></p>
+<!-- /wp:paragraph -->
+
+<!-- wp:heading -->
+<h2 class="wp-block-heading">The results</h2>
+<!-- /wp:heading -->
+
+<!-- wp:table -->
+<figure class="wp-block-table"><table class="has-fixed-layout"><thead><tr><th>Metric (median)</th><th>AirLLM, local</th><th>Foundry</th></tr></thead><tbody><tr><td>Time to first token</td><td>22.7 to 23.3 s</td><td>0.34 to 0.36 s</td></tr><tr><td>Total time for 16 tokens</td><td>about 361 s</td><td>about 0.4 s</td></tr><tr><td>Throughput</td><td>0.044 tokens/s</td><td>about 40 tokens/s</td></tr><tr><td>One time setup</td><td>79 min (download and layer split)</td><td>a few minutes (deployment)</td></tr><tr><td>Cost</td><td>electricity and hardware</td><td>0.71 USD per 1M input and output tokens</td></tr></tbody></table></figure>
+<!-- /wp:table -->
+
+<!-- wp:image {"id":372,"linkDestination":"none"} -->
+<figure class="wp-block-image"><img src="https://blog.frezz-tech.de/wp-content/uploads/2026/10/benchmark_70b.png" alt="Dot plot on a logarithmic scale. Throughput: AirLLM 0.04 tokens per second, Foundry about 40. Time to first token: AirLLM about 23 seconds, Foundry about 0.35 seconds, for short, medium and long prompts." class="wp-image-372"/><figcaption class="wp-element-caption">Medians per prompt length, 16 new tokens, both axes logarithmic. Same model on both sides: Llama 3.3 70B Instruct.</figcaption></figure>
+<!-- /wp:image -->
+
+<!-- wp:paragraph -->
+<p></p>
+<!-- /wp:paragraph -->
+
+<!-- wp:paragraph -->
+<p>A few things stand out:</p>
+<!-- /wp:paragraph -->
+
+<!-- wp:list -->
+<ul class="wp-block-list"><!-- wp:list-item -->
+<li><strong>Every token costs a full pass over the model</strong>. About 20 seconds per token matches 140 GB read from the SSD at roughly 7 GB/s. The chip is not the bottleneck, the disk is.</li>
+<!-- /wp:list-item -->
+
+<!-- wp:list-item -->
+<li><strong>Prompt length barely matters</strong> for short prompts, because the cost is dominated by loading the layers.</li>
+<!-- /wp:list-item -->
+
+<!-- wp:list-item -->
+<li><strong>A 200 token answer would take more than an hour</strong> locally. In Foundry it takes a few seconds.</li>
+<!-- /wp:list-item -->
+
+<!-- wp:list-item -->
+<li><strong>The cloud side is cheap.</strong> Llama 3.3 70B in the Global Standard deployment costs 0.71 USD per million input and output tokens (Azure Retail Prices API, Sweden Central, checked on 6 October 2026). My 15 benchmark requests with about 59 input and 16 output tokens cost less than a tenth of a cent in total. Generating one million tokens locally at 0.044 tokens per second would take about 260 days.</li>
+<!-- /wp:list-item --></ul>
+<!-- /wp:list -->
+
+<!-- wp:paragraph -->
+<p></p>
+<!-- /wp:paragraph -->
+
+<!-- wp:heading -->
+<h2 class="wp-block-heading">What I learned on the Foundry side</h2>
+<!-- /wp:heading -->
+
+<!-- wp:paragraph -->
+<p>The benchmark itself taught me more than the numbers. Four pitfalls are worth knowing:</p>
+<!-- /wp:paragraph -->
+
+<!-- wp:list {"ordered":true} -->
+<ol class="wp-block-list"><!-- wp:list-item -->
+<li><strong>Silent retries distort latency</strong>: In an earlier test with a smaller model (gpt-5-mini) and a deployment capacity of 10, my time to first token jumped to about 5 seconds. The cause was throttling (HTTP 429) combined with automatic retries in the SDK, which hide the problem inside the timing. I now disable SDK retries in the benchmark, wait for the retry hint outside the timed section and count throttled attempts separately.</li>
+<!-- /wp:list-item -->
+
+<!-- wp:list-item -->
+<li><strong>Check quota before you deploy</strong>: The Llama 3.3 70B quota in my subscription was 20 (thousand tokens per minute). My first deployment asked for 50 and the what-if validation rejected it. Running what-if before every deployment saved me from a half-created resource.</li>
+<!-- /wp:list-item -->
+
+<!-- wp:list-item -->
+<li><strong>The catalog and your account can disagree</strong>: The model catalog listed version 10. My account offered versions 1 to 5 and 9. Ask the account itself with <code>az cognitiveservices account list-models</code> instead of trusting the web page.</li>
+<!-- /wp:list-item -->
+
+<!-- wp:list-item -->
+<li><strong>Not every model takes the same parameters</strong>: Reasoning models such as gpt-5-mini need <code>max_completion_tokens</code> and accept a reasoning effort setting. For Llama through the OpenAI compatible v1 endpoint I simply left the reasoning setting out. If a call fails with HTTP 400, check what that specific deployment accepts.</li>
+<!-- /wp:list-item --></ol>
+<!-- /wp:list -->
+
+<!-- wp:paragraph -->
+<p></p>
+<!-- /wp:paragraph -->
+
+<!-- wp:heading -->
+<h2 class="wp-block-heading">Which one should you use?</h2>
+<!-- /wp:heading -->
+
+<!-- wp:table -->
+<figure class="wp-block-table"><table class="has-fixed-layout"><thead><tr><th>Situation</th><th>AirLLM</th><th>Foundry</th></tr></thead><tbody><tr><td>Offline prototype, no cloud allowed</td><td>works, slowly</td><td>not possible</td></tr><tr><td>Overnight batch with short outputs</td><td>possible if time is free</td><td>faster and cheap per token</td></tr><tr><td>Interactive chat or an agent</td><td>not usable</td><td>suitable</td></tr><tr><td>Many parallel users</td><td>one request at a time</td><td>scales with quota</td></tr><tr><td>Data must not leave the machine</td><td>fits</td><td>Data Zone or Regional deployment instead of Global, plus network isolation</td></tr><tr><td>Model larger than your memory</td><td>the real use case</td><td>managed models only</td></tr></tbody></table></figure>
+<!-- /wp:table -->
+
+<!-- wp:paragraph -->
+<p>Data residency is not free in the cloud, but it is cheap. For Llama 3.3 70B in Sweden Central the list price per million tokens is 0.71 USD for Global Standard, 0.781 USD for Data Zone and 0.859 USD for Regional deployments (Azure Retail Prices API, checked on 6 October 2026). Data Zone and Regional deployments are the ones meant for stricter data residency requirements. Only a fully offline setup like AirLLM keeps the data on the machine for certain.</p>
+<!-- /wp:paragraph -->
+
+<!-- wp:paragraph -->
+<p>My rule of thumb: use AirLLM when the constraint is "this must run here" and time does not matter. Use Foundry as soon as a human waits for the answer or more than one request arrives at a time.</p>
+<!-- /wp:paragraph -->
+
+<!-- wp:paragraph -->
+<p></p>
+<!-- /wp:paragraph -->
+
+<!-- wp:heading -->
+<h2 class="wp-block-heading">What this means in practice</h2>
+<!-- /wp:heading -->
+
+<!-- wp:list -->
+<ul class="wp-block-list"><!-- wp:list-item -->
+<li><strong>Develop small, run big</strong>: Test prompts and code against a small local model and run production in Foundry.</li>
+<!-- /wp:list-item -->
+
+<!-- wp:list-item -->
+<li><strong>Use AirLLM for the exceptions</strong>: A one off analysis, a demo without internet or a model that must stay on this machine and time does not matter.</li>
+<!-- /wp:list-item -->
+
+<!-- wp:list-item -->
+<li><strong>Choose the deployment type by your data rules</strong>: Global, Data Zone and Regional differ by a few cents per million tokens, not by orders of magnitude.</li>
+<!-- /wp:list-item -->
+
+<!-- wp:list-item -->
+<li><strong>Check quota, model version and parameters before a demo</strong>: The catalog and your account can disagree.</li>
+<!-- /wp:list-item --></ul>
+<!-- /wp:list -->
+
+<!-- wp:paragraph -->
+<p></p>
+<!-- /wp:paragraph -->
+
+<!-- wp:heading -->
+<h2 class="wp-block-heading">macOS, NVIDIA and what changes</h2>
+<!-- /wp:heading -->
+
+<!-- wp:paragraph -->
+<p>I ran everything on a MacBook with Apple silicon, so AirLLM used its MLX backend. That has a few consequences:</p>
+<!-- /wp:paragraph -->
+
+<!-- wp:list -->
+<ul class="wp-block-list"><!-- wp:list-item -->
+<li>On macOS only Llama architecture models work, which is why Llama was the natural choice for both sides.</li>
+<!-- /wp:list-item -->
+
+<!-- wp:list-item -->
+<li>There is no stop token handling, answers can repeat until the token limit is reached. It does not affect the timing.</li>
+<!-- /wp:list-item -->
+
+<!-- wp:list-item -->
+<li>The first run downloads the model and splits it into one file per layer. For 70B that took 79 minutes and needs about twice the model size in free disk space, roughly 285 GB.</li>
+<!-- /wp:list-item --></ul>
+<!-- /wp:list -->
+
+<!-- wp:paragraph -->
+<p>On a machine with an NVIDIA GPU the local numbers will look different, for example with the torch backend or 4 bit compression. I would still expect the same conclusion. The gap to the cloud is about 900 times, so even a setup that is ten times faster would be about 90 times slower than the Foundry deployment and every token still needs a full pass over the layers from disk. This is an expectation based on the size of the gap, I did not measure it on NVIDIA hardware.</p>
+<!-- /wp:paragraph -->
+
+<!-- wp:paragraph -->
+<p></p>
+<!-- /wp:paragraph -->
+
+<!-- wp:heading -->
+<h2 class="wp-block-heading">Conclusion</h2>
+<!-- /wp:heading -->
+
+<!-- wp:paragraph -->
+<p>AirLLM is a clever trick that makes a 70B model run on a laptop. Foundry is what you use as soon as someone waits for the answer. The gap I measured is about 900 times for this model on this machine, which is too large for a faster computer to change the decision.</p>
+<!-- /wp:paragraph -->
+
+<!-- wp:paragraph -->
+<p>If you own an NVIDIA GPU I would like to see your numbers. The benchmark is in the repo and a pull request with a new results file is all it takes.</p>
+<!-- /wp:paragraph -->
+
+<!-- wp:buttons -->
+<div class="wp-block-buttons"><!-- wp:button -->
+<div class="wp-block-button"><a class="wp-block-button__link wp-element-button" href="https://github.com/Frezz146/airllm-vs-foundry">View the repo on GitHub</a></div>
+<!-- /wp:button --></div>
+<!-- /wp:buttons -->
+
+<!-- wp:paragraph -->
+<p></p>
+<!-- /wp:paragraph -->
+
+<!-- wp:heading -->
+<h2 class="wp-block-heading">Try it yourself</h2>
+<!-- /wp:heading -->
+
+<!-- wp:quote -->
+<blockquote class="wp-block-quote"><!-- wp:paragraph -->
+<p><strong>Before you start</strong></p>
+<!-- /wp:paragraph -->
+
+<!-- wp:list -->
+<ul class="wp-block-list"><!-- wp:list-item -->
+<li>About 285 GB of free disk space for the 70B model (download plus split layer files)</li>
+<!-- /wp:list-item -->
+
+<!-- wp:list-item -->
+<li>Azure CLI signed in with <code>az login</code> on the right tenant</li>
+<!-- /wp:list-item -->
+
+<!-- wp:list-item -->
+<li>Quota for Llama 3.3 70B in your region (mine was 20 thousand tokens per minute)</li>
+<!-- /wp:list-item -->
+
+<!-- wp:list-item -->
+<li>Python 3.12 and uv, see the README in the repo</li>
+<!-- /wp:list-item -->
+
+<!-- wp:list-item -->
+<li>Run <code>scripts/foundry.sh destroy</code> when you are done</li>
+<!-- /wp:list-item --></ul>
+<!-- /wp:list --></blockquote>
+<!-- /wp:quote -->
+
+<!-- wp:prismatic/blocks {"language":"bash"} -->
+<pre class="wp-block-prismatic-blocks"><code class="language-bash">git clone https://github.com/Frezz146/airllm-vs-foundry
+cd airllm-vs-foundry
+scripts/foundry.sh deploy -m Llama-3.3-70B-Instruct --model-format Meta --model-version 9 -d bench-llama --capacity 20
+
+# run the benchmarks, then clean up
+scripts/foundry.sh destroy</code></pre>
+<!-- /wp:prismatic/blocks -->
+
+<!-- wp:paragraph -->
+<p>The destroy command removes the resource group and purges the soft deleted account, so nothing keeps costing money.</p>
+<!-- /wp:paragraph -->
+
+<!-- wp:details -->
+<details class="wp-block-details"><summary>Limits of this benchmark</summary><!-- wp:list -->
+<ul class="wp-block-list"><!-- wp:list-item -->
+<li>Small sample: 2 AirLLM runs per prompt and only 16 tokens. Read the numbers as an order of magnitude.</li>
+<!-- /wp:list-item -->
+
+<!-- wp:list-item -->
+<li>The throughput figure for Foundry includes the startup time because only 16 tokens were generated. The pure generation rate is higher, but the order of magnitude stays the same.</li>
+<!-- /wp:list-item -->
+
+<!-- wp:list-item -->
+<li>The OS file cache was not cleared, although a 140 GB model on a 64 GB machine limits that effect.</li>
+<!-- /wp:list-item -->
+
+<!-- wp:list-item -->
+<li>One region and one time of day. Foundry latency can vary with load.</li>
+<!-- /wp:list-item -->
+
+<!-- wp:list-item -->
+<li>The local side has no price tag here. Electricity and hardware wear are not included and cloud prices can change.</li>
+<!-- /wp:list-item --></ul>
+<!-- /wp:list --></details>
+<!-- /wp:details -->
+
+<!-- wp:paragraph -->
+<p></p>
+<!-- /wp:paragraph -->
+
+<!-- wp:paragraph -->
+<p><em>These are personal measurements on my own hardware and Azure subscription. This is an independent project and not affiliated with Microsoft. Prices and model versions can change.</em></p>
+<!-- /wp:paragraph -->
